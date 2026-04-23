@@ -1,0 +1,55 @@
+# Standalone Ironic lab — no Keystone, noauth mode
+# Reference: https://docs.openstack.org/ironic/latest/install/standalone.html
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ironic
+      MYSQL_USER: ironic
+      MYSQL_PASSWORD: ironic
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ironic
+      RABBITMQ_DEFAULT_PASS: ironic
+      RABBITMQ_DEFAULT_VHOST: ironic
+    ports:
+      - "15672:15672"  # management UI
+
+  ironic-api:
+    image: quay.io/metal3-io/ironic:latest
+    command: ironic-api
+    depends_on: [mysql, rabbitmq]
+    ports:
+      - "6385:6385"
+    volumes:
+      - ./configs/ironic.conf:/etc/ironic/ironic.conf:ro
+    environment:
+      OS_AUTH_TYPE: none
+
+  ironic-conductor:
+    image: quay.io/metal3-io/ironic:latest
+    command: ironic-conductor
+    depends_on: [mysql, rabbitmq, ironic-api]
+    network_mode: host  # needs direct L2 access for IPMI/PXE
+    volumes:
+      - ./configs/ironic.conf:/etc/ironic/ironic.conf:ro
+      - ./pxe:/var/lib/ironic/tftpboot:ro
+    privileged: true    # required for raw IPMI socket access
+
+  ironic-inspector:
+    image: quay.io/metal3-io/ironic:latest
+    command: ironic-inspector
+    depends_on: [ironic-api]
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./configs/ironic.conf:/etc/ironic/ironic.conf:ro
+
+volumes:
+  mysql_data:
