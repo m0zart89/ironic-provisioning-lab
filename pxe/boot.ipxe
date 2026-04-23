@@ -1,0 +1,29 @@
+#!ipxe
+
+# Ironic-managed iPXE boot script
+# This file is served by the Ironic conductor's HTTP server
+# Node MAC → DHCP → TFTP undionly.kpxe → HTTP this script → IPA kernel
+
+echo Booting Ironic Python Agent (IPA)...
+echo Node: ${uuid}
+echo MAC:  ${mac}
+
+set ironic_url http://192.168.100.1:8080
+
+kernel ${ironic_url}/ipa.kernel \
+    initrd=ipa.initrd \
+    ipa-api-url=http://192.168.100.1:6385 \
+    ipa-inspection-callback-url=http://192.168.100.1:5050/v1/continue \
+    systemd.journald.forward_to_console=yes \
+    console=tty0 \
+    console=ttyS0,115200n8 \
+    BOOTIF=${mac} \
+    || goto retry
+
+initrd ${ironic_url}/ipa.initrd
+boot || goto retry
+
+:retry
+echo Boot failed, retrying in 10s...
+sleep 10
+chain ${ironic_url}/boot.ipxe
